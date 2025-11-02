@@ -1,0 +1,10 @@
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.
+retrieval:
+  chunk_size: 2000
+  chunk_overlap: 200
+  embedding_model_name: 'text-embedding-3-small'
+  data_path: ./data
+  vector_store_path: ./vector_store/faiss_index
