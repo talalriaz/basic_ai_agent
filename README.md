@@ -46,20 +46,23 @@ text- **State**: `State` (from `AIAgent`)
 ### 1. Install dependencies
 
 ```bash
-pip install fastapi uvicorn langgraph langchain-openai requests pydantic
+pip install -r requirements.txt
 ```
+### 2. Create ENV file
 
-### 2. Run the API
+Create ```.env``` file in the root folder and add openai api key as ```OPENAI_API_KEY = "sk-proj********"```
+
+### 3. Run the FAST API (Backend) Server
 ```bash
 python app.py
 ```
 Server starts at: ```http://localhost:8000```
-### 3. Try it
+
+### 4. Run Streamlit (in a new terminal)
 ```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What is the current date and time?"}'
+streamlit run streamlit_app.py
 ```
+Open your browser at ```http://localhost:8501``` and have fun.
 
 
 
@@ -78,16 +81,3 @@ curl -X POST http://localhost:8000/chat \
 
 
 
-
-
-MethodEndpointDescriptionPOST/chatSend message, get answer + traceGET/Health checkDELETE/session/{id}Clear session (optional)
-Swagger UI: http://localhost:8000/docs
-
-Project Structure
-textsrc/
-├── agent/
-│   ├── ai_agent.py         ← AIAgent with node logic
-│   ├── tools.py            ← ToolDefinitions (HTTP, time, etc.)
-│   └── graph_builder.py    ← BotPipeline + graph definition
-├── app.py                  ← FastAPI wrapper
-└── README.md

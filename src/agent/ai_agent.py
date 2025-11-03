@@ -28,6 +28,7 @@ class State(MessagesState):
     query: Optional[str]
     next_step: Optional[str]
     feedback: str
+    remove_tool_message: bool
 
 class AIAgent:
     def __init__(self):
@@ -129,11 +130,11 @@ class AIAgent:
             prompt = [SystemMessage(system_message)] + state['messages']
             client_tools = self.llm.bind_tools(self.llm.client,self.tools_list)
             response = self.safe_llm_invoke(client_tools,prompt)
-            logger.info(f"React agent call successful")
+            logger.info(f"react_agent call successful")
             if len(response.content) > 0:
                 logger.info(f"-"*50)
                 logger.info(f"Response: {response.content}")
-            return {"messages": [response],'acceptable_message_length': 5, "remove_tool_message": True,"feedback": ""}
+            return {"messages": [response],'acceptable_message_length': 5, "feedback": ""}
 
         except Exception as e:
             logger.error(f"API call failed: {str(e)}")
@@ -151,6 +152,7 @@ class AIAgent:
             system_message = final_analysis_prompt.format(summary=summary)
             prompt = [SystemMessage(system_message)] + conversation_messages
             response = self.safe_llm_invoke(self.llm.client,prompt)
+            logger.info(f"final_analysis call successful")
             response_text = response.content
             if response_text.strip().upper().startswith("CLARIFY"):
                 questions = response_text.split("CLARIFY", 1)[1].strip()
@@ -168,7 +170,8 @@ class AIAgent:
                 return {
                     "next_step": "react_agent",
                      "messages": [AIMessage(content=feedback)],
-                     "feedback": feedback
+                     "feedback": feedback,
+                     "remove_tool_message": True
                 }
             elif response_text.strip().upper().startswith("ANSWER"):
                 end_statement = response_text.split("ANSWER", 1)[1].strip()
@@ -178,15 +181,16 @@ class AIAgent:
                     "next_step": END,
                     "clarification_needed": False,
                     "messages": [AIMessage(content=end_statement)],
-                    "feedback": ""
+                    "feedback": "",
+                    "remove_tool_message": True
                 }
             else:
                 return {
                     "next_step": END,
                     "clarification_needed": False,
                     "messages": [AIMessage(content=response_text)],
-                    "remove_tool_message": False,
-                    "feedback": ""
+                    "remove_tool_message": True,
+                    "feedback": "",
                 }
 
         except Exception as e:
@@ -199,7 +203,7 @@ class AIAgent:
     def summarize_conversation(self, state: State):
 
         if len(state["messages"]) > state.get("acceptable_message_length",7):
-
+            logger.info("Summary module")
             summary = state.get("summary", "")
             messages = []
             if summary:
