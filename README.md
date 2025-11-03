@@ -51,31 +51,19 @@ pip install fastapi uvicorn langgraph langchain-openai requests pydantic
 
 ### 2. Run the API
 ```bash
-python app.
+python app.py
 ```
 Server starts at: ```http://localhost:8000```
 ### 3. Try it
 ```bash
-# First message
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is the current latency?"}'
-json{
-  "session_id": "abc123...",
-  "answer": "The latency is currently 120ms.",
-  "trace": [ { "tool": "http_rest_tool", "source": "mock", ... } ]
-}
-```
-```
-```bash
-# Follow-up
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "abc123...", "message": "What time is it?"}'
+  -d '{"message": "What is the current date and time?"}'
 ```
 
 ### 4. Project Structure
-textsrc/
+text
+src/
 ├── agent/
 │   ├── ai_agent.py         ← AIAgent with node logic
 │   ├── tools.py            ← ToolDefinitions (HTTP, time, etc.)
