@@ -61,18 +61,6 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "What is the current date and time?"}'
 ```
 
-### 4. Project Structure
-text
-src/
-├── agent/
-│   ├── ai_agent.py         ← AIAgent with node logic
-│   ├── tools.py            ← ToolDefinitions (HTTP, time, etc.)
-│   └── graph_builder.py    ← BotPipeline + graph definition
-├── app.py                  ← FastAPI wrapper
-└── README.md
-
-
-
 
 
 
