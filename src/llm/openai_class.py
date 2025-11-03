@@ -9,12 +9,13 @@ class OpenAIClient(LLMClient):
         self.model = model
         self.temperature = temperature
 
-    def chat(self, messages: List[Message], **kwargs) -> str:
-        response = self.client.invoke(
+    def chat(self, client,messages: List[Message], **kwargs) -> str:
+        response = client.invoke(
             input=messages,
             **kwargs,
         )
         return response
     
-    def bind_tools(self, tools: List[Any]):
-        self.client = self.client.bind_tools(tools)
+    def bind_tools(self, client, tools: List[Any]):
+        client_tools = client.bind_tools(tools)
+        return client_tools

@@ -13,7 +13,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from src.llm.factory_class import create_llm
 from src.utils.config import load_config
 from src.agent.tools import ToolDefinitions
-from src.llm.prompts import query_analysis_prompt, initial_analysis_prompt
+from src.llm.prompts import initial_analysis_prompt, query_analysis_prompt,final_analysis_prompt
 
 from dotenv import load_dotenv
 
@@ -27,6 +27,7 @@ class State(MessagesState):
     clarification_needed: bool
     query: Optional[str]
     next_step: Optional[str]
+    feedback: str
 
 class AIAgent:
     def __init__(self):
@@ -36,9 +37,7 @@ class AIAgent:
         self.tools_definitions = ToolDefinitions()
         self.tools_list = [self.tools_definitions._get_hr_policies(),
                             self.tools_definitions._get_time_tool(),
-                            self.tools_definitions._get_http_response]
-        # self.vector_store = VectorDBManager()
-
+                            ]
 
     RETRY_EXCEPTIONS = (RateLimitError, APIConnectionError, APITimeoutError)
     @retry(
@@ -47,10 +46,10 @@ class AIAgent:
             stop=stop_after_attempt(5),
             before_sleep=lambda retry_state: logger.info(f"Retrying in {retry_state.next_action.sleep} seconds... (Attempt {retry_state.attempt_number})")
         )
-    def safe_llm_invoke(self,messages, **kwargs):
+    def safe_llm_invoke(self,client,messages, **kwargs):
         """Safely invoke the LLM with comprehensive error handling"""
         try:
-            return self.llm.chat(messages, **kwargs)
+            return self.llm.chat(client,messages, **kwargs)
         except RateLimitError as e:
             logger.warning(f"Rate limit exceeded: {str(e)}")
             raise
@@ -81,7 +80,7 @@ class AIAgent:
             ]
             system_message = initial_analysis_prompt.format(summary=summary)
             prompt = [SystemMessage(system_message)] + conversation_messages
-            response = self.safe_llm_invoke(prompt)
+            response = self.safe_llm_invoke(self.llm.client,prompt)
             response_text = response.content
             logger.info(f"initial_analysis call successful")
             logger.info(f"Follow-up response: {response_text}")
@@ -110,7 +109,8 @@ class AIAgent:
                     "next_step": END,
                     "clarification_needed": False,
                     "messages": [AIMessage(content=response_text)],
-                    "remove_tool_message": False
+                    "remove_tool_message": False,
+                    "feedback": ""
                 }
 
         except Exception as e:
@@ -124,15 +124,70 @@ class AIAgent:
         """Analyze the user query to determine if and which tools need to be called."""
         try:
             summary = state.get("summary", "")
-            system_message = query_analysis_prompt.format(summary=summary)
+            feedback = state.get("feedback", "")
+            system_message = query_analysis_prompt.format(summary=summary,feedback=feedback)
             prompt = [SystemMessage(system_message)] + state['messages']
-            self.llm.bind_tools(self.tools_list)
-            response = self.safe_llm_invoke(prompt)
+            client_tools = self.llm.bind_tools(self.llm.client,self.tools_list)
+            response = self.safe_llm_invoke(client_tools,prompt)
             logger.info(f"React agent call successful")
             if len(response.content) > 0:
                 logger.info(f"-"*50)
                 logger.info(f"Response: {response.content}")
-            return {"messages": [response],'acceptable_message_length': 5, "remove_tool_message": True}
+            return {"messages": [response],'acceptable_message_length': 5, "remove_tool_message": True,"feedback": ""}
+
+        except Exception as e:
+            logger.error(f"API call failed: {str(e)}")
+            return {
+                "messages": [AIMessage(content="I'm sorry, I'm having trouble responding right now. Please try again later.")]
+            }
+
+    def final_analysis(self, state: State):
+        """Analyze the final response to determine if human feedback is needed or not."""
+        try:
+            summary = state.get("summary", "")
+            conversation_messages = [message for message in state["messages"] if message.type in ("human", "system")
+            or (message.type == "ai" and not message.tool_calls)
+            ]
+            system_message = final_analysis_prompt.format(summary=summary)
+            prompt = [SystemMessage(system_message)] + conversation_messages
+            response = self.safe_llm_invoke(self.llm.client,prompt)
+            response_text = response.content
+            if response_text.strip().upper().startswith("CLARIFY"):
+                questions = response_text.split("CLARIFY", 1)[1].strip()
+                logger.info(f"Clarification required from the user: {questions}")
+                return {
+                    "next_step": END,
+                    "clarification_needed": True,
+                     "messages": [AIMessage(content=questions)],
+                     "feedback": ""
+                }
+            elif response_text.strip().upper().startswith("RECONSIDER"):
+                feedback = response_text.split("RECONSIDER", 1)[1].strip()
+                logger.info(f"AI answer not satisfactory: {feedback}")
+
+                return {
+                    "next_step": "react_agent",
+                     "messages": [AIMessage(content=feedback)],
+                     "feedback": feedback
+                }
+            elif response_text.strip().upper().startswith("ANSWER"):
+                end_statement = response_text.split("ANSWER", 1)[1].strip()
+                logger.info(f"Final answer: {end_statement}")
+
+                return {
+                    "next_step": END,
+                    "clarification_needed": False,
+                    "messages": [AIMessage(content=end_statement)],
+                    "feedback": ""
+                }
+            else:
+                return {
+                    "next_step": END,
+                    "clarification_needed": False,
+                    "messages": [AIMessage(content=response_text)],
+                    "remove_tool_message": False,
+                    "feedback": ""
+                }
 
         except Exception as e:
             logger.error(f"API call failed: {str(e)}")
@@ -162,7 +217,7 @@ class AIAgent:
 
             messages = messages + [{"role": "human", "content": summary_message}]
             try:
-                response = self.safe_llm_invoke(messages)
+                response = self.safe_llm_invoke(self.llm.client,messages)
                 logger.info(f"Summarizer LLM call successful")
             except Exception as e:
                 # Handle the case where all retries failed

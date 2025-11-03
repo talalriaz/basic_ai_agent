@@ -18,6 +18,6 @@ class LLMClient(ABC):
         pass
 
     @abstractmethod
-    def bind_tools(self, tools: List[Any]):
+    def bind_tools(self, client, tools: List[Any]):
         """Bind tools to the LLM client and return a new instance."""
         pass

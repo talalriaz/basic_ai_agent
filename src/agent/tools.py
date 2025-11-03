@@ -1,7 +1,6 @@
 from langchain_core.tools import tool
-import requests
-from typing import Dict, Any
 from src.retrieval.vector_db import VectorDBManager
+
 
 class ToolDefinitions:
     def __init__(self):
@@ -15,7 +14,8 @@ class ToolDefinitions:
                 from datetime import datetime
                 now = datetime.now()
                 current_time = now.strftime("%H:%M:%S")
-                return f"The current time is {current_time}"
+                current_date = now.strftime("%Y-%m-%d") 
+                return f"The current time is {current_time} and date is {current_date}"
             return _get_current_time
 
     def _get_hr_policies(self):
@@ -30,30 +30,3 @@ class ToolDefinitions:
                 except Exception as e:
                     return 'Error in retrieving context'
             return _get_hr
-    
-    def _get_http_response(self):
-        @tool(response_format="dict")
-        def http_rest_tool(query: str) -> Dict[str, Any]:
-            """
-            HTTP tool to get response from real public API.
-            """
-            url = "https://dummyjson.com/quotes/random"
-            
-            try:
-                response = requests.get(url, timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "source": "real_api",
-                        "quote": data.get("quote", "No quote found"),
-                        "author": data.get("author", "Unknown")
-                    }
-            except Exception:
-                pass 
-
-            return {
-                "source": "mock",
-                "quote": "The latency is currently 120ms.",
-                "author": "System Monitor"
-            }
-        return http_rest_tool

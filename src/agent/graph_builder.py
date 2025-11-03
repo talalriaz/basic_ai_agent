@@ -19,11 +19,16 @@ class BotPipeline:
         """Check if query is relevant to the role or not."""
         return state.get("next_step", "react_agent")
 
+    def final_condition(self, state: State) -> Literal["human_node", None]:
+        """Check if more clarification is required or not"""
+        return state.get("next_step", END)
+    
     def build_graph(self):
         self.graph_builder = StateGraph(State)
         self.graph_builder.add_node(self.ai_agent.initial_analysis)
         self.graph_builder.add_node(self.ai_agent.react_agent)
         self.graph_builder.add_node(self.ai_agent.tools)
+        self.graph_builder.add_node(self.ai_agent.final_analysis)
         self.graph_builder.add_node(self.ai_agent.summarize_conversation)
 
         self.graph_builder.set_entry_point("initial_analysis")
@@ -35,11 +40,15 @@ class BotPipeline:
         self.graph_builder.add_conditional_edges(
             "react_agent",
             tools_condition,
-            {END : END, "tools": "tools"},
+            {"tools": "tools", END : "final_analysis"},
         )
         self.graph_builder.add_edge("tools", "react_agent")
-
-        # self.graph_builder.add_edge("summarize_conversation", END)
+        self.graph_builder.add_conditional_edges(
+            "final_analysis",
+            self.final_condition,
+            {END : "summarize_conversation", "react_agent": "react_agent"},
+        )
+        self.graph_builder.add_edge("summarize_conversation", END)
 
         self.graph = self.graph_builder.compile(checkpointer=self.memory)
 
@@ -54,6 +63,4 @@ class BotPipeline:
                 response = step["messages"][-1]
                 responses.append(response)
 
-                if response.type == 'tool':
-                    self.context.append(response.content)
-            return responses[-1].content, self.context
+            return responses[-1].content
